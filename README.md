@@ -113,6 +113,8 @@ If you are deploying on the cloud, it is recommended to use the [Enterprise Edit
 
   Higress connects to all LLM model providers using a unified protocol, with AI observability, multi-model load balancing, token rate limiting, and caching capabilities:
 
+  It can also be placed in front of AI applications to centralize request governance across model APIs and MCP servers, helping teams reuse the same authentication, traffic control, and audit capabilities while keeping provider integrations flexible.
+
   ![](https://img.alicdn.com/imgextra/i2/O1CN01izmBNX1jbHT7lP3Yr_!!6000000004566-0-tps-1920-1080.jpg)
 
 - **Kubernetes ingress controller**:
