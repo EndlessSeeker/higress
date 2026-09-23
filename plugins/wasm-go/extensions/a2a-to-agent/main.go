@@ -151,7 +151,11 @@ func setRequest(c config, method, path string, body []byte, stream bool) {
 	_ = proxywasm.ReplaceHttpRequestBody(body)
 }
 func setCloudStream(c config, r *request) {
-	path := c.APIBasePath + "/sessions/" + url.PathEscape(r.Session) + "/events/stream?event_deltas%5B%5D=agent.message"
+	eventType := "agent.message"
+	if c.Provider == "bailian-managed" {
+		eventType = "message"
+	}
+	path := c.APIBasePath + "/sessions/" + url.PathEscape(r.Session) + "/events/stream?event_deltas%5B%5D=" + eventType
 	if c.Provider == "claude-managed" {
 		path += "&beta=true"
 	}
@@ -217,8 +221,8 @@ func onResponseHeaders(ctx wrapper.HttpContext, c config) types.Action {
 		if c.Provider == "claude-managed" {
 			path += "?beta=true"
 		}
-		payload, _ := json.Marshal(map[string]any{"events": []any{map[string]any{"type": "user.message", "content": []any{map[string]any{"type": "text", "text": m.r.Text}}}}})
-		// Subscribe first: both cloud APIs tail live events and can lose output if
+		payload := cloudMessage(c, m.r.Text)
+		// Subscribe first: cloud APIs can tail live events and lose output if
 		// a user message is submitted before the event stream is established.
 		err := dispatch(c, path, payload, func(status int, _ []byte) {
 			if status < 200 || status >= 300 {

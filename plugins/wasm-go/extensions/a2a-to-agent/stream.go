@@ -90,6 +90,9 @@ type streamMapper struct {
 	text                   string
 	received               int
 	cloudEventID           string
+	managedRootThread      string
+	managedPreviews        map[string]map[int]string
+	managedCompleted       map[string]bool
 	messageTexts           map[string]string
 	messageOrder           []string
 	deferred               []sseEvent
@@ -316,6 +319,8 @@ func (m *streamMapper) event(name string, v gjson.Result) []byte {
 		}
 	case "qoder", "claude-managed":
 		return m.cloudEvent(v)
+	case "bailian-managed":
+		return m.bailianManagedEvent(v)
 	}
 	return nil
 }

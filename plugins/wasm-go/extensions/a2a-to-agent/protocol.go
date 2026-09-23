@@ -54,7 +54,7 @@ func (c *config) validate() error {
 		if c.APIPath == "" {
 			c.APIPath = "/v3/chat"
 		}
-	case "qoder", "claude-managed":
+	case "qoder", "claude-managed", "bailian-managed":
 		if c.AgentID == "" || c.SessionConfig["environment_id"] == nil {
 			return errors.New("cloud providers require agentId and sessionConfig.environment_id")
 		}
@@ -64,6 +64,8 @@ func (c *config) validate() error {
 		if c.APIBasePath == "" {
 			if c.Provider == "qoder" {
 				c.APIBasePath = "/api/v1/cloud"
+			} else if c.Provider == "bailian-managed" {
+				c.APIBasePath = "/api/v1/agentstudio"
 			} else {
 				c.APIBasePath = "/v1"
 			}
@@ -100,7 +102,9 @@ func (c *config) validate() error {
 	}
 	return nil
 }
-func (c config) cloud() bool { return c.Provider == "qoder" || c.Provider == "claude-managed" }
+func (c config) cloud() bool {
+	return c.Provider == "qoder" || c.Provider == "claude-managed" || c.Provider == "bailian-managed"
+}
 func (c config) card() map[string]any {
 	out := map[string]any{}
 	for k, v := range c.AgentCard {
