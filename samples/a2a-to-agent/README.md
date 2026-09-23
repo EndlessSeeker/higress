@@ -5,7 +5,8 @@ Kubernetes data path. Five deterministic HTTP services emulate the documented
 Dify, Bailian Application, Coze, Qoder Cloud Agents and Claude Managed Agents
 wire protocols. They do not execute real vendor agents or require vendor keys.
 See the [plugin documentation](../../plugins/wasm-go/extensions/a2a-to-agent/README.md)
-for configuration, supported operations and limitations.
+for configuration, supported operations and limitations. The completed run is
+recorded in [VERIFICATION.md](VERIFICATION.md).
 
 A request follows this path:
 
@@ -106,3 +107,10 @@ Official references: [Dify](https://github.com/langgenius/dify/blob/1.9.2/web/ap
 [Qoder API](https://docs.qoder.com/cloud-agents/api-overview),
 [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/reference),
 [A2A 1.0 wire schema](https://github.com/a2aproject/A2A/blob/v1.0.0/specification/a2a.proto).
+
+Qoder and Claude Managed Agents share one session/event conversion implementation
+in this plugin. Their provider names select authentication, path and version
+presets; they do not represent two duplicated converters. The common wire shape
+is useful for reuse but is not a claim of a vendor-neutral standard or complete
+interchangeability. In particular, Qoder rejects a new message during an active
+turn with HTTP 409, while Claude can queue events.
