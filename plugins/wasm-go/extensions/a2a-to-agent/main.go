@@ -160,6 +160,11 @@ func setCloudStream(c config, r *request) {
 		path += "&beta=true"
 	}
 	setRequest(c, "GET", path, nil, true)
+	// A bodyless SSE subscription must have explicit HTTP/1 request framing.
+	// The original A2A POST body has been removed; leaving its length unknown
+	// can make an upstream wait for a body before returning SSE headers.
+	_ = proxywasm.RemoveHttpRequestHeader("transfer-encoding")
+	_ = proxywasm.ReplaceHttpRequestHeader("content-length", "0")
 }
 func dispatch(c config, path string, body []byte, cb func(int, []byte)) error {
 	headers := [][2]string{{":method", "POST"}, {":path", path}, {":authority", c.UpstreamAuthority}, {":scheme", c.UpstreamScheme}, {"content-type", "application/json"}}

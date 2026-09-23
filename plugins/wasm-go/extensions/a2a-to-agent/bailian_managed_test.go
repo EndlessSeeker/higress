@@ -51,7 +51,13 @@ func TestBailianManagedConfigAndRequest(t *testing.T) {
 func TestHostBailianManagedSubscriptionAndSubmission(t *testing.T) {
 	h, id := testHost(t, "bailian-managed")
 	b := input("SendStreamingMessage")
-	h.CallOnRequestHeaders(id, headers(b), false)
+	requestHeaders := headers(b)
+	for i, h := range requestHeaders {
+		if h[0] == "content-length" {
+			requestHeaders[i] = [2]string{"transfer-encoding", "chunked"}
+		}
+	}
+	h.CallOnRequestHeaders(id, requestHeaders, false)
 	h.CallOnRequestBody(id, b, true)
 	calls := h.GetCalloutAttributesFromContext(id)
 	if len(calls) != 1 || header(calls[0].Headers, ":path") != "/api/v1/agentstudio/sessions" || header(calls[0].Headers, "authorization") != "Bearer secret" || gjson.GetBytes(calls[0].Body, "agent").String() != "agent-1" || gjson.GetBytes(calls[0].Body, "environment_id").String() != "env1" {
@@ -61,6 +67,9 @@ func TestHostBailianManagedSubscriptionAndSubmission(t *testing.T) {
 	req := h.GetCurrentRequestHeaders(id)
 	if len(h.GetCalloutAttributesFromContext(id)) != 0 || header(req, ":method") != "GET" || header(req, ":path") != "/api/v1/agentstudio/sessions/session-new/events/stream?event_deltas%5B%5D=message" || header(req, "authorization") != "Bearer secret" || header(req, "x-dashscope-sse") != "" || header(req, "x-consumer") != "" {
 		t.Fatal(req)
+	}
+	if header(req, "content-length") != "0" || header(req, "transfer-encoding") != "" || len(h.GetCurrentRequestBody(id)) != 0 {
+		t.Fatal("SSE subscription must have an explicitly empty body", req)
 	}
 	if a := h.CallOnResponseHeaders(id, [][2]string{{":status", "200"}, {"content-type", "text/event-stream"}}, false); a != types.HeaderStopAllIterationAndWatermark {
 		t.Fatal(a)

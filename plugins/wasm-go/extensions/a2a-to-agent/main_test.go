@@ -74,7 +74,7 @@ func TestHostCloudOpensStreamBeforeSubmittingMessage(t *testing.T) {
 	if len(h.GetCalloutAttributesFromContext(id)) != 0 {
 		t.Fatal("message sent before SSE opened")
 	}
-	if header(h.GetCurrentRequestHeaders(id), ":method") != "GET" {
+	if req := h.GetCurrentRequestHeaders(id); header(req, ":method") != "GET" || header(req, "content-length") != "0" || len(h.GetCurrentRequestBody(id)) != 0 {
 		t.Fatal(h.GetCurrentRequestHeaders(id))
 	}
 	a := h.CallOnResponseHeaders(id, [][2]string{{":status", "200"}, {"content-type", "text/event-stream"}}, false)
