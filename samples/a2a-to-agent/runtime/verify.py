@@ -30,7 +30,8 @@ def message(text="你好 Agent", stream=True, context=None):
     return {"jsonrpc": "2.0", "id": "demo-9007199254740993", "method": "SendStreamingMessage" if stream else "SendMessage", "params": {"message": msg}}
 
 
-def run(provider, text="你好 Agent", stream=True, context=None, expected="TASK_STATE_COMPLETED"):
+def run(provider, text="你好 Agent", stream=True, context=None, expected="TASK_STATE_COMPLETED", expected_answer=None):
+    expected_answer = expected_answer if expected_answer is not None else "Echo: " + text
     start = time.monotonic()
     with request(provider, message(text, stream, context)) as response:
         assert response.status == 200, (provider, response.status, response.read())
@@ -41,7 +42,7 @@ def run(provider, text="你好 Agent", stream=True, context=None, expected="TASK
             assert task["status"]["state"] == expected, task
             answer = "".join(p.get("text", "") for a in task.get("artifacts", []) for p in a["parts"])
             if expected == "TASK_STATE_COMPLETED":
-                assert answer == "Echo: " + text, answer
+                assert answer == expected_answer, answer
             checks.append(provider + ": blocking " + expected)
             return task.get("contextId")
         assert response.headers["Content-Type"].startswith("text/event-stream")
@@ -82,7 +83,7 @@ def run(provider, text="你好 Agent", stream=True, context=None, expected="TASK
         assert task_seen and terminal == expected, (provider, terminal, answer)
         assert elapsed < 10, (provider, "terminal stream did not close promptly", elapsed)
         if expected == "TASK_STATE_COMPLETED":
-            assert answer == "Echo: " + text, (provider, answer)
+            assert answer == expected_answer, (provider, answer)
             assert first_output is not None and elapsed - first_output > .12, (provider, first_output, elapsed)
         assert native_context, (provider, "missing signed context")
         checks.append(provider + ": streaming " + expected + " (incremental)")
@@ -98,7 +99,7 @@ for provider in providers:
     checks.append(provider + ": Agent Card")
     context = run(provider)
     if provider in ("dify", "bailian", "coze"):
-        run(provider, "续聊", context=context)
+        run(provider, "续聊", context=context, expected_answer="Echo: 续聊 (previous: 你好 Agent)")
         run(provider, stream=False)
         run(provider, "FAIL", expected="TASK_STATE_FAILED")
         run(provider, "TRUNCATE", expected="TASK_STATE_FAILED")

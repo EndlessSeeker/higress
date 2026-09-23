@@ -13,11 +13,21 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 sessions = {}
+native_history = {}
 lock = threading.Lock()
 
 
 def identifier(prefix):
     return prefix + uuid.uuid4().hex
+
+
+def native_answer(sid, query):
+    with lock:
+        previous = native_history.get(sid)
+        if query == "续聊" and previous is None:
+            raise ValueError("continuation did not reuse a known conversation")
+        native_history[sid] = query
+    return "Echo: " + query + (" (previous: " + previous + ")" if query == "续聊" else "")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -139,12 +149,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply({"error": "missing dify fields"}, 400)
             query = body["query"]
             sid = body.get("conversation_id") or identifier("conv_")
+            try:
+                answer = native_answer(sid, query)
+            except ValueError as error:
+                return self.reply({"error": str(error)}, 400)
             common = {"conversation_id": sid, "message_id": "dm1", "task_id": "dt1"}
             if body.get("response_mode") == "blocking":
-                return self.reply({**common, "event": "message", "answer": "Echo: " + query})
+                return self.reply({**common, "event": "message", "answer": answer})
             self.stream_headers()
             self.event({**common, "event": "agent_thought", "id": "thought1", "position": 1, "thought": "Planning", "tool": "search", "tool_input": "{}", "observation": "found"})
-            self.event({**common, "event": "agent_message", "answer": "Echo: " + query})
+            self.event({**common, "event": "agent_message", "answer": answer})
             time.sleep(.25)
             if "TRUNCATE" in query:
                 self.close_connection = True
@@ -160,13 +174,17 @@ class Handler(BaseHTTPRequestHandler):
             if query is None:
                 return self.reply({"code": "InvalidParameter", "message": "input.prompt required"}, 400)
             sid = body["input"].get("session_id") or identifier("bailian_")
+            try:
+                answer = native_answer(sid, query)
+            except ValueError as error:
+                return self.reply({"code": "InvalidSession", "message": str(error)}, 400)
             def output(text, finish="null", **extra):
                 return {"output": {"text": text, "session_id": sid, "finish_reason": finish, **extra}, "request_id": "br1"}
             if self.headers.get("X-DashScope-SSE") != "enable":
-                return self.reply(output("Echo: " + query, "stop"))
+                return self.reply(output(answer, "stop"))
             self.stream_headers()
             self.event(output("", thoughts=[{"thought": "Planning", "action_type": "API", "action_name": "search", "action_input": "{}", "observation": "found"}]))
-            self.event(output("Echo: " + query))
+            self.event(output(answer))
             time.sleep(.25)
             if "TRUNCATE" not in query:
                 self.event({"code": "InvalidApiKey", "message": "fixture failure"} if "FAIL" in query else output("", "stop"))
@@ -178,8 +196,12 @@ class Handler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs
             sid = parse_qs(urlparse(self.path).query).get("conversation_id", [identifier("coze_")])[0]
             query = body["additional_messages"][0]["content"]
+            try:
+                answer = native_answer(sid, query)
+            except ValueError as error:
+                return self.reply({"code": 400, "msg": str(error)}, 400)
             chat = {"id": "ct1", "conversation_id": sid, "bot_id": body["bot_id"]}
-            msg = {"id": "cm1", "conversation_id": sid, "chat_id": "ct1", "role": "assistant", "type": "answer", "content": "Echo: " + query, "content_type": "text"}
+            msg = {"id": "cm1", "conversation_id": sid, "chat_id": "ct1", "role": "assistant", "type": "answer", "content": answer, "content_type": "text"}
             self.stream_headers()
             self.event({**chat, "status": "created"}, "conversation.chat.created")
             self.event(msg, "conversation.message.delta")

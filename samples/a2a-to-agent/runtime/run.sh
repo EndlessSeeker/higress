@@ -5,6 +5,12 @@ set -euo pipefail
 WASM_FILE=${1:?Usage: run.sh /absolute/path/plugin.wasm}
 DEMO_PORT=${DEMO_PORT:-18080}
 EVIDENCE_DIR=${EVIDENCE_DIR:-/tmp/a2a-to-agent-evidence}
+# Fail before deployment if an older forward could answer the verification port.
+python3 - "$DEMO_PORT" <<'PYPORT'
+import socket, sys
+with socket.socket() as check:
+    check.bind(("127.0.0.1", int(sys.argv[1])))
+PYPORT
 mkdir -p "$EVIDENCE_DIR"
 RUNTIME_DIR=samples/a2a-to-agent/runtime
 if command -v sha256sum >/dev/null; then
@@ -26,11 +32,15 @@ python3 "$RUNTIME_DIR/render.py" "$WASM_SHA" > "$EVIDENCE_DIR/resources.json"
 kubectl apply -f "$EVIDENCE_DIR/resources.json"
 kubectl rollout restart deployment/higress-gateway -n a2a-agent-demo
 kubectl rollout status deployment/higress-gateway -n a2a-agent-demo --timeout=120s
-kubectl port-forward -n a2a-agent-demo svc/higress-gateway "$DEMO_PORT:80" > "$EVIDENCE_DIR/port-forward.log" 2>&1 &
+kubectl port-forward --address=127.0.0.1 -n a2a-agent-demo svc/higress-gateway "$DEMO_PORT:80" > "$EVIDENCE_DIR/port-forward.log" 2>&1 &
 FORWARD_PID=$!
 trap 'kill "$FORWARD_PID" 2>/dev/null || true; wait "$FORWARD_PID" 2>/dev/null || true' EXIT
 READY=false
 for attempt in $(seq 1 30); do
+  if ! kill -0 "$FORWARD_PID" 2>/dev/null; then
+    cat "$EVIDENCE_DIR/port-forward.log" >&2
+    exit 1
+  fi
   if curl --noproxy '*' -fsS --max-time 1 -H 'Host: dify.agent.test' \
     "http://127.0.0.1:$DEMO_PORT/.well-known/agent-card.json" > "$EVIDENCE_DIR/agent-card.json"; then
     READY=true
@@ -43,6 +53,7 @@ if [[ "$READY" != true ]]; then
   exit 1
 fi
 python3 "$RUNTIME_DIR/verify.py" "http://127.0.0.1:$DEMO_PORT" | tee "$EVIDENCE_DIR/results.json"
+kill -0 "$FORWARD_PID"
 kubectl get --raw /version > "$EVIDENCE_DIR/kubernetes-version.json"
 kubectl get pods -n a2a-agent-demo -o json > "$EVIDENCE_DIR/pods.json"
 kubectl logs -n a2a-agent-demo deployment/higress-gateway > "$EVIDENCE_DIR/gateway.log"
