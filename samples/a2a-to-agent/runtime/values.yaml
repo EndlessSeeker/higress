@@ -1,0 +1,17 @@
+global:
+  ingressClass: a2a-agent-demo
+  gatewayClass: a2a-agent-demo
+  watchNamespace: a2a-agent-demo
+  enableGatewayAPI: false
+  enableIstioAPI: false
+gateway:
+  replicas: 1
+  tag: v2.2.4
+  service:
+    type: ClusterIP
+controller:
+  tag: v2.2.4
+  automaticHttps:
+    enabled: false
+pilot:
+  tag: v2.2.4
